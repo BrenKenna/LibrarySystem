@@ -1,0 +1,222 @@
+///////////////////////////////////////////////////////////////////
+/ 
+/ Library System Singleton Pattern
+/ 
+///////////////////////////////////////////////////////////////////
+
+
+        // Initalize library system
+        LibrarySystem firstOne = LibrarySystem.getInstance();
+        
+        // Create a borrow
+        Request bookForm = firstOne.queryByIndex(Datapoint_Edge.BOOK, 0);
+        Request studentForm = firstOne.queryByIndex(Datapoint_Edge.STUDENT, 0);
+        String sysMsg = firstOne.issueBorrow(bookForm.getValue("Book ID"), studentForm.getValue("Student ID"));
+        System.out.println(sysMsg);
+        
+        
+        // Get another library and view Borrows
+        LibrarySystem secondOne = LibrarySystem.getInstance();
+        for(String i : secondOne.selectAllString(Datapoint_Edge.BORROW) ){
+            System.out.println(i);
+        }
+
+
+///////////////////////////////////////////////////////////////////
+/ 
+/ Library System Controller
+/ 
+///////////////////////////////////////////////////////////////////
+
+
+        // Instantiate library system
+        LibrarySystem libraryDB = new LibrarySystem();
+        System.out.println("\nPrinting library status:");
+        System.out.println("N Books = " +  libraryDB.selectAll(Datapoint_Edge.BOOK).size() );
+        System.out.println("N Students = " +  libraryDB.selectAll(Datapoint_Edge.STUDENT).size() );
+
+        
+        // Check borrow & return
+        System.out.println("\nTesting borrow & return requests:");
+        String bookID = "2f982e14-7acd-4c99-8d5a-203d25861051";
+        String studentID = "e7ba4d85-3918-483a-b228-134b0c9876d9";
+        System.out.println(libraryDB.issueBorrow(bookID, studentID));
+        System.out.println(libraryDB.issueReturn(bookID, studentID));
+        
+        
+        // Check adding to queue
+        System.out.println("\nTesting persistence on borrow queue");
+        bookID = "bc8447a2-9fba-4387-a7fa-d443ff6c5a03";
+        System.out.println( libraryDB.queryID(Datapoint_Edge.BOOK, bookID).toJsonString() );
+        String[] students = {"409f3d70-ee05-437e-a27c-d6e2a0cfca1c", "2bee8bc1-bf4c-4b8c-848a-a55b152ef1eb", "fa3fa0b7-5b36-484b-aa30-ea2d2fbaa4b6"};
+        for(String student : students) {
+            System.out.println(libraryDB.issueBorrow(bookID, student));
+        }
+        
+        
+        // View borrows and returns
+        for(Datapoint_Edge type : Datapoint_Edge.getType(Datapoint_Type.ACTIVITY) ) {
+            System.out.println("\n\nViewing data for: " + type);
+            for(Datapoint data : libraryDB.selectAll(type)) {
+                System.out.println(data.toJsonString());
+            }
+        }
+        
+        
+        // View queue for book
+        System.out.println("\nViewing book");
+        System.out.println( libraryDB.queryID(Datapoint_Edge.BOOK, bookID).toJsonString() );
+        libraryDB.saveDB();
+
+
+
+///////////////////////////////////////////////////////////////////
+/
+/ Designing the Model
+/
+///////////////////////////////////////////////////////////////////
+
+
+        // Generate a random Book dataset & insert into library DB
+        Dataset bookDataset = dataUtil.generateBooks(10);
+        System.out.println("\n\nGenreating Book dataset & viewing data:");
+        for(Datapoint book : bookDataset.delegate_getDataset(Datapoint_Edge.BOOK)  ) {
+            libraryDB.insert(book);
+            System.out.println(book);
+        }
+        
+        
+        // Generate a random Student dataset & insert into library DB
+        System.out.println("\n\nTesting the StudentDataset");
+        Dataset studentDataset = dataUtil.generateStudents(10);
+        for(Datapoint student : studentDataset.delegate_getDataset(Datapoint_Edge.STUDENT) ) {
+            libraryDB.insert(student);
+            System.out.println(student);
+        }
+        
+        
+        // Generate random borrow dataset
+        System.out.println("\n\nTesting the Borrow Dataset:");
+        Dataset borrowDataset = dataUtil.generateBorrows(studentDataset, bookDataset, 10);
+        System.out.println("\n###################\n");
+        for(Datapoint borrow : borrowDataset.delegate_getDataset(Datapoint_Edge.BORROW) ) {
+            System.out.println(borrow.toJsonString());
+        }
+
+        
+        // Generate random Return Dataset
+        System.out.println("\n\nTesting the Return Dataset:");
+        Dataset returnDataset = dataUtil.generateReturns(borrowDataset, 5);
+        
+        
+        // View returns
+        for(Datapoint returnDatapoint : returnDataset.delegate_getDataset(Datapoint_Edge.RETURN) ) {
+            System.out.println(returnDatapoint);
+        }
+        
+        
+        // Sanity check clearing of borrows
+        System.out.println("\n\nViewing borrows following returns:");
+        for(Datapoint borrow : borrowDataset.delegate_getDataset(Datapoint_Edge.BORROW)  ) {
+            System.out.println(borrow);
+        }
+        System.out.println("Size of Borrow = " + borrowDataset.delegate_getSize(Datapoint_Edge.BORROW) + ", Size of returns = " + returnDataset.delegate_getSize(Datapoint_Edge.RETURN) );
+        
+        
+        /**
+         * 
+         * Sanity check issuing next borrow and resolve to a return
+         * 
+         */
+        
+        // Issue next borrow
+        System.out.println("\n\nIssuing next borrow");
+        for(Datapoint book: bookDataset.delegate_getDataset(Datapoint_Edge.BOOK)) {
+            Datapoint nextBorrow = dataUtil.issueNext((Book) book, studentDataset);
+            if( nextBorrow != null ) {
+                borrowDataset.delegate_Add(nextBorrow);
+            }
+        }
+
+        
+        // View dataset jsonDump()
+        System.out.println("\n\nViewing current borrows:");
+        System.out.println(borrowDataset.delegate_JsonDump(Datapoint_Edge.BORROW));
+        
+        
+        // Issue next return
+        System.out.println("\n\nIssuing returns:");
+        List<Datapoint> toRemove = new ArrayList<>();
+        for(Datapoint borrow: borrowDataset.delegate_getDataset(Datapoint_Edge.BORROW) ) {
+            
+            // Issue return
+            Datapoint nextReturn = dataUtil.issueReturn(borrow);
+            
+            // If return is valid
+            if( nextReturn != null ) {
+                
+                // Add to return dataset & schedule clearing
+                returnDataset.delegate_Add(nextReturn);
+                toRemove.add(borrow);
+            }
+        }
+        
+        // Clear the borrows & view datasets
+        System.out.println("\n\nClearing processed returns from borrow & displaying current datasets:");
+        dataUtil.clearBorrow(toRemove, borrowDataset);
+        for(Datapoint returnDatapoint : returnDataset.delegate_getDataset(Datapoint_Edge.RETURN) ) {
+            System.out.println(returnDatapoint.toJsonString());
+        }
+        System.out.println("\nActive borrows are now:");
+        for(Datapoint borrow : borrowDataset.delegate_getDataset(Datapoint_Edge.BORROW) ) {
+            System.out.println(borrow.toJsonString());
+        }
+        
+        
+        /**
+         * Read book & students
+         */
+        System.out.println("\nViewing books & students after borrows & returns:");
+        for(Datapoint dp : bookDataset.delegate_getDataset(Datapoint_Edge.BOOK) ) {
+            System.out.println(dp.toJsonString());
+        }
+        System.out.println("\n");
+        for(Datapoint dp : studentDataset.delegate_getDataset(Datapoint_Edge.STUDENT) ) {
+            System.out.println(dp.toJsonString());
+        }
+        
+        
+        /**
+         * Test writing each dataset
+         * 
+         */
+        System.out.println("\n\nTesting writing datasets:");
+        try {
+            // bookDataset.delegate_writeDataset(Datapoint_Edge.BOOK);
+            // studentDataset.delegate_writeDataset(Datapoint_Edge.STUDENT);
+            returnDataset.delegate_writeDataset(Datapoint_Edge.RETURN);
+            libraryDB.saveDB();
+        }
+        catch(IOException ex) {
+            System.out.println(ex);
+        }
+
+        
+        /**
+         * Read in book data:
+         *  -> Should only happen this way once => Import 
+         *  -> After that all Items should be read standardized way => Load for DB
+         * 
+         */
+        System.out.println("\n\nTesting reading mock data");
+        Dataset mockBookData;
+        try {
+            mockBookData = dataUtil.streamBooks("resources/mock-data/MOCK_DATA.csv", true);
+            System.out.println("N Books: " + mockBookData.delegate_getSize(Datapoint_Edge.BOOK));
+            for( int i = 0; i < 10; i++) {
+                System.out.println( mockBookData.delegate_getByIndex(Datapoint_Edge.BOOK, i) );
+            }
+            
+        } catch (Exception ex) {
+            System.out.println(ex);
+        }

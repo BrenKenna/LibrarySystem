@@ -1,0 +1,140 @@
+/*
+ * To change this license header, choose License Headers in Project Properties.
+ * To change this template file, choose Tools | Templates
+ * and open the template in the editor.
+ */
+package datasetpartition_testing;
+
+import Controller.LibrarySystem;
+import Model.Datapoint.*;
+import Model.Dataset.*;
+import Model.Dataset.IndexCollection.Dataset_Index;
+import java.io.IOException;
+import java.util.List;
+
+/**
+ * Indexing interface for the library system data works well
+ *  => Use queryByIndex methods in Menu = Searching done
+ *  => Fix persistency bugs
+ *  => Custom student queue
+ *
+ * @author kenna
+ */
+public class DatasetPartition_Testing {
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) throws IOException {
+        
+        /**
+         * Read in book data & Test querying index:
+         *  -> Should only happen this way once => Import 
+         *  -> After that all Items should be read standardized way => Load for DB
+         * 
+         */
+        System.out.println( Datapoint_Edge.STUDENT.getValidIndexTypes() );
+        System.out.println("Test reading & querying the mock data:");
+        Dataset_Utils dataUtil = new Dataset_Utils();
+        Dataset mockBookData;
+        try {
+            
+            // Import
+            mockBookData = dataUtil.streamBooks("resources/mock-data/MOCK_DATA.csv", true);
+            System.out.println("N Books: " + mockBookData.delegate_getSize(Datapoint_Edge.BOOK));
+            for( int i = 0; i < 10; i++) {
+                System.out.println( mockBookData.delegate_getByIndex(Datapoint_Edge.BOOK, i) );
+            }
+            
+            // Query first name
+            String fName = "abdel", lName = "agutter", title = "5x2";
+            List<Datapoint> results;
+            results = mockBookData.delegateIndexQuery(Datapoint_Edge.BOOK, Dataset_Index.FIRST_NAME, fName);
+            System.out.println(results);
+            
+            
+            results = mockBookData.delegateIndexQuery(Datapoint_Edge.BOOK, Dataset_Index.LAST_NAME, lName);
+            System.out.println(results);
+            
+            results = mockBookData.delegateIndexQuery(Datapoint_Edge.BOOK, Dataset_Index.TITLE, title);
+            System.out.println(results);
+            
+        } catch (Exception ex) {
+            System.out.println(ex);
+        }
+        
+        
+        /**
+         * 
+         * Test Library System with IndexCollection updates
+         * 
+         */
+        
+        // Test importing
+        System.out.println("\n\nTesting library with index collection:");
+        LibrarySystem libraryDB = LibrarySystem.getInstance();
+
+        
+        // Sanity check borrow
+        System.out.println("\nSanity checking borrowing:");
+        System.out.println(libraryDB.issueBorrow(0, 0));
+        System.out.println(libraryDB.issueBorrow(1, 2));
+        System.out.println(libraryDB.issueBorrow(2, 3));
+        System.out.println(libraryDB.issueBorrow(3, 4));
+        System.out.println(libraryDB.issueBorrow(4, 5));
+        System.out.println(libraryDB.issueBorrow(5, 6));
+        System.out.println(libraryDB.selectAll(Datapoint_Edge.BORROW));
+
+        
+        // Sanity check return
+        System.out.println("\nSanity checking returning:");
+        System.out.println(libraryDB.issueReturn(0, 0));
+        System.out.println(libraryDB.issueReturn(1, 2));
+        System.out.println(libraryDB.issueReturn(2, 3));
+        System.out.println(libraryDB.issueReturn(3, 4));
+        System.out.println(libraryDB.issueReturn(4, 5));
+        System.out.println(libraryDB.issueReturn(5, 6));
+        System.out.println(libraryDB.selectAll(Datapoint_Edge.RETURN));
+        
+
+        // Test saving
+        System.out.println(libraryDB.issueBorrow(3, 4));
+        System.out.println(libraryDB.issueBorrow(4, 5));
+        System.out.println(libraryDB.issueBorrow(5, 6));
+        libraryDB.saveDataset(Datapoint_Edge.RETURN);
+        libraryDB.saveDataset(Datapoint_Edge.BORROW);
+        
+        
+        /**
+         * 
+         * Test querying library indexes
+         * 
+         */
+        
+        // Fetch some results
+        System.out.println("\n\nTesting querying of library indexes:");
+        int nReturns = 3;
+        int nBorrows = 2;
+        
+        // Test querying books
+        System.out.println("\nBooks:");
+        String fName = "Alex", lName = "Ziff", title = "HEX";
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.BOOK, Dataset_Index.FIRST_NAME, fName) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.BOOK, Dataset_Index.LAST_NAME, lName) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.BOOK, Dataset_Index.TITLE, title) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.BOOK, Dataset_Index.N_BORROW, nBorrows) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.BOOK, Dataset_Index.N_RETURNS, nReturns) );
+        
+        // Test querying students
+        System.out.println("\nStudents:");
+        fName = "Alice";
+        lName = "Collins";
+        nReturns = 26;
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.STUDENT, Dataset_Index.FIRST_NAME, fName) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.STUDENT, Dataset_Index.LAST_NAME, lName) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.STUDENT, Dataset_Index.N_BORROW, nBorrows) );
+        System.out.println( libraryDB.queryByIndex(Datapoint_Edge.STUDENT, Dataset_Index.N_RETURNS, nReturns) );
+    }
+    
+}
+
